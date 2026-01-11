@@ -1,122 +1,79 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:18
-    ports:
-      - "15432:5432"
-    environment:
-      - POSTGRES_USER=pgsync
-      - POSTGRES_PASSWORD=PLEASE_CHANGE_ME
-      - POSTGRES_DB=postgres
-    command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=2", "-c", "max_replication_slots=2"]
-
-  redis:
-    image: redis
-    command: redis-server --requirepass PLEASE_CHANGE_ME
-
-  # Elasticsearch stack (default)
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13
-    ports:
-      - "9201:9200"
-      - "9301:9300"
-    environment:
-      - xpack.security.enabled=false
-      - network.host=127.0.0.1
-      - http.host=0.0.0.0
-    profiles:
-      - ""
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:7.17.13
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    depends_on:
-      - elasticsearch
-    profiles:
-      - ""
-
-  # OpenSearch stack (use with --profile opensearch)
-  opensearch:
-    image: opensearchproject/opensearch:latest
-    profiles:
-      - opensearch
-    ports:
-      - "9400:9200"
-      - "9600:9600"
-    environment:
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true
-      - "DISABLE_INSTALL_DEMO_CONFIG=true"
-      - "DISABLE_SECURITY_PLUGIN=true"
-
-  # PGSync with Elasticsearch (default)
-  pgsync-elasticsearch:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    profiles:
-      - ""
-    command: ./runserver.sh
-    sysctls:
-      - net.ipv4.tcp_keepalive_time=200
-      - net.ipv4.tcp_keepalive_intvl=200
-      - net.ipv4.tcp_keepalive_probes=5
-    labels:
-      org.label-schema.name: "pgsync"
-      org.label-schema.description: "Postgres to Elasticsearch sync"
-      com.label-schema.service-type: "daemon"
-    depends_on:
-      - postgres
-      - redis
-      - elasticsearch
-    environment:
-      - PG_USER=pgsync
-      - PG_HOST=postgres
-      - PG_PORT=5432
-      - PG_PASSWORD=PLEASE_CHANGE_ME
-      - LOG_LEVEL=INFO
-      - ELASTICSEARCH_PORT=9200
-      - ELASTICSEARCH_SCHEME=http
-      - ELASTICSEARCH_HOST=elasticsearch
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_AUTH=PLEASE_CHANGE_ME
-      - ELASTICSEARCH=true
-
-  # PGSync with OpenSearch
-  pgsync-opensearch:
-    profiles:
-      - opensearch
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: ./runserver.sh
-    sysctls:
-      - net.ipv4.tcp_keepalive_time=200
-      - net.ipv4.tcp_keepalive_intvl=200
-      - net.ipv4.tcp_keepalive_probes=5
-    labels:
-      org.label-schema.name: "pgsync"
-      org.label-schema.description: "Postgres to OpenSearch sync"
-      com.label-schema.service-type: "daemon"
-    depends_on:
-      - postgres
-      - redis
-      - opensearch
-    environment:
-      - PG_USER=pgsync
-      - PG_HOST=postgres
-      - PG_PORT=5432
-      - PG_PASSWORD=PLEASE_CHANGE_ME
-      - LOG_LEVEL=INFO
-      - ELASTICSEARCH_PORT=9200
-      - ELASTICSEARCH_SCHEME=http
-      - ELASTICSEARCH_HOST=opensearch
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_AUTH=PLEASE_CHANGE_ME
-      - OPENSEARCH=true
+    postgres:
+        image: postgres:14
+        ports:
+            - "25432:5432"
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=Upbase2022
+            - POSTGRES_DB=postgres
+        volumes:
+            - upbase_oms_cqrs:/var/lib/postgresql/data
+        command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=2", "-c", "max_replication_slots=2", "-c", "log_statement=all",
+                    "-c",
+                    "logging_collector=on",
+                    "-c",
+                    "log_directory=pg_log",
+                    "-c",
+                    "log_duration=on"]
+    redis:
+        image: redis
+        command: redis-server
+    elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13
+        ports:
+            - "9211:9200"
+            - "9311:9300"
+        environment:
+            - xpack.security.enabled=false
+            - network.host=127.0.0.1
+            - http.host=0.0.0.0
+    kibana:
+        image: docker.elastic.co/kibana/kibana:7.17.13
+        ports:
+            - "5611:5601"
+        environment:
+            - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+        depends_on:
+            - elasticsearch
+    pgsync:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        command: bash -c "chmod +x ./docker/runserver.sh && ./docker/runserver.sh"
+        tty: true
+        volumes:
+            - .:/code
+        sysctls:
+            - net.ipv4.tcp_keepalive_time=200
+            - net.ipv4.tcp_keepalive_intvl=200
+            - net.ipv4.tcp_keepalive_probes=5
+        labels:
+            org.label-schema.name: "pgsync"
+            org.label-schema.description: "Postgres to Elasticsearch sync"
+            com.label-schema.service-type: "daemon"
+        depends_on:
+            - postgres
+            - redis
+            - elasticsearch
+        environment:
+            - PG_USER=postgres
+            - PG_HOST=postgres
+            - PG_PORT=5432
+            - PG_PASSWORD=Upbase2022
+            - LOG_LEVEL=DEBUG
+            - ELASTICSEARCH_PORT=9200
+            - ELASTICSEARCH_SCHEME=http
+            - ELASTICSEARCH_HOST=elasticsearch
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+            - REDIS_AUTH=
+            - ELASTICSEARCH=true
+            - CONSOLE_LOGGING_HANDLER_MIN_LEVEL=DEBUG
+            - CHECKPOINT_PATH=checkpoint_path
+            - ELASTICSEARCH_TIMEOUT=60
+            - WAL=true
+volumes:
+    upbase_oms_cqrs: {}

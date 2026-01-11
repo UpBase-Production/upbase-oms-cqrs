@@ -93,7 +93,7 @@ class Payload(object):
         indices (List[str]): The indices of the affected rows (for UPDATE and DELETE operations).
     """
 
-    __slots__ = ("tg_op", "table", "schema", "old", "new", "xmin", "indices")
+    __slots__ = ("tg_op", "table", "schema", "old", "new", "xmin", "indices", "sme_id")
 
     def __init__(
         self,
@@ -104,6 +104,8 @@ class Payload(object):
         new: t.Optional[t.Dict[str, t.Any]] = None,
         xmin: t.Optional[int] = None,
         indices: t.Optional[t.List[str]] = None,
+        sme_id: t.Optional[int] = None,
+        **_: t.Any,
     ):
         self.tg_op: t.Optional[str] = tg_op
         self.table: t.Optional[str] = table
@@ -112,6 +114,7 @@ class Payload(object):
         self.new: t.Dict[str, t.Any] = new or {}
         self.xmin: t.Optional[int] = xmin
         self.indices: t.List[str] = indices
+        self.sme_id: t.Optional[int] = sme_id
 
     @property
     def data(self) -> dict:

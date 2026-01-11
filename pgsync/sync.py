@@ -1343,18 +1343,31 @@ class Sync(Base, metaclass=Singleton):
             logger.exception(f"Unknown tg_op {payload.tg_op}")
             raise InvalidTGOPError(f"Unknown tg_op {payload.tg_op}")
 
-        # we might receive an event triggered for a table
-        # that is not in the tree node.
-        # e.g a through table which we need to react to.
-        # in this case, we find the parent of the through
-        # table and force a re-sync.
+        # We might receive events for a partition table that backs a logical
+        # parent in the schema tree (e.g. "sc_logistics_packages_p20" for
+        # "sc_logistics_packages"). In that case, try to normalize the table
+        # name back to its parent before deciding whether to skip.
+        #
+        # Fallback is to keep the original table name.
+        table_name: str = payload.table
+        parent_table_name: str = table_name
+
+        # Simple convention-based partition naming: "<parent>_pNN"
+        match_partition = re.match(r"(?P<parent>.+)_p\d+$", table_name)
+        if match_partition:
+            candidate_parent: str = match_partition.group("parent")
+            if candidate_parent in self.tree.tables:
+                parent_table_name = candidate_parent
+
+        # If, after normalization, the table or schema is still unknown to the tree,
+        # there is nothing for us to sync.
         if (
-            payload.table not in self.tree.tables
+            parent_table_name not in self.tree.tables
             or payload.schema not in self.tree.schemas
         ):
             return
 
-        node: Node = self.tree.get_node(payload.table, payload.schema)
+        node: Node = self.tree.get_node(parent_table_name, payload.schema)
 
         for payload in payloads:
             # this is only required for the non truncate tg_ops
