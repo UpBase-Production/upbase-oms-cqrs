@@ -32,31 +32,29 @@ services:
     redis:
         image: redis
         command: redis-server
-    opensearch:
-        image: opensearchproject/opensearch:latest
+    elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13
         ports:
-            - "9400:9200"
-            - "9600:9600"
+            - "9211:9200"
+            - "9311:9300"
         environment:
-            - discovery.type=single-node
-            - bootstrap.memory_lock=true
-            - "DISABLE_INSTALL_DEMO_CONFIG=true"
-            - "DISABLE_SECURITY_PLUGIN=true"
-            # - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=Upbase@2026"
-    opensearch-dashboards:
-        image: opensearchproject/opensearch-dashboards:latest
+            - xpack.security.enabled=false
+            - network.host=127.0.0.1
+            - http.host=0.0.0.0
+    kibana:
+        image: docker.elastic.co/kibana/kibana:7.17.13
         ports:
-            - 5661:5601
+            - "5611:5601"
         environment:
-            - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
-            # - OPENSEARCH_USERNAME=admin
-            # - OPENSEARCH_PASSWORD=Upbase@2026
-            - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
-    pgsync-opensearch:
+            - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+        depends_on:
+            - elasticsearch
+    pgsync:
         build:
             context: .
             dockerfile: Dockerfile
         command: bash -c "chmod +x ./docker/runserver.sh && ./docker/runserver.sh"
+        tty: true
         volumes:
             - .:/code
         sysctls:
@@ -70,7 +68,7 @@ services:
         depends_on:
             - postgres
             - redis
-            - opensearch
+            - elasticsearch
         environment:
             - PG_USER=postgres
             - PG_HOST=postgres
@@ -79,14 +77,14 @@ services:
             - LOG_LEVEL=DEBUG
             - ELASTICSEARCH_PORT=9200
             - ELASTICSEARCH_SCHEME=http
-            - ELASTICSEARCH_HOST=opensearch
+            - ELASTICSEARCH_HOST=elasticsearch
             - REDIS_HOST=redis
             - REDIS_PORT=6379
             - REDIS_AUTH=
+            - ELASTICSEARCH=true
             - CONSOLE_LOGGING_HANDLER_MIN_LEVEL=DEBUG
             - CHECKPOINT_PATH=checkpoint_path
             - ELASTICSEARCH_TIMEOUT=60
             - WAL=true
-            - OPENSEARCH=true
 volumes:
     upbase_oms_cqrs: {}

@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+    oms-cqrs:
+        image: ${IMAGE_OMS_CQRS}
+        command: bash -c "chmod +x ./docker/runserver.sh && ./docker/runserver.sh"
+        sysctls:
+            - net.ipv4.tcp_keepalive_time=200
+            - net.ipv4.tcp_keepalive_intvl=200
+            - net.ipv4.tcp_keepalive_probes=5
+        labels:
+            org.label-schema.name: "oms-cqrs"
+            org.label-schema.description: "Postgres to Elasticsearch sync for OMS CQRS"
+            com.label-schema.service-type: "daemon"
+        restart: unless-stopped
+        environment:
+            - EXAMPLE_NAME=oms_cqrs
+            - PG_USER=${PG_USER:-postgres}
+            - PG_HOST=${PG_HOST:-postgres}
+            - PG_PORT=${PG_PORT:-5432}
+            - PG_PASSWORD=${PG_PASSWORD}
+            - PG_DATABASE=${PG_DATABASE:-postgres}
+            - LOG_LEVEL=${LOG_LEVEL:-INFO}
+            - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
+            - ELASTICSEARCH_SCHEME=${ELASTICSEARCH_SCHEME:-http}
+            - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+            - REDIS_HOST=${REDIS_HOST:-redis}
+            - REDIS_PORT=${REDIS_PORT:-6379}
+            - REDIS_AUTH=${REDIS_AUTH:-}
+            - CONSOLE_LOGGING_HANDLER_MIN_LEVEL=${CONSOLE_LOGGING_HANDLER_MIN_LEVEL:-INFO}
+            - CHECKPOINT_PATH=${CHECKPOINT_PATH:-checkpoint_path}
+            - ELASTICSEARCH_TIMEOUT=${ELASTICSEARCH_TIMEOUT:-60}
+            - WAL=${WAL:-true}
+            - ELASTICSEARCH=${ELASTICSEARCH:-true}
+        volumes:
+            - checkpoint_path:/code/checkpoint_path
+volumes:
+    checkpoint_path:
+

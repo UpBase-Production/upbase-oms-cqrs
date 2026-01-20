@@ -1,0 +1,65 @@
+name: upbase-oms-cqrs
+on:
+  push:
+    branches:
+      - master
+      - prod
+jobs:
+  staging-deploy:
+    if: ${{ github.ref == 'refs/heads/master' }}
+    runs-on: self-hosted
+    steps:
+      - name: Notify result
+        if: always()
+        uses: ivanmilov/telegram_notify_action@v1
+        with:
+          api_key: ${{ secrets.TELEGRAM_API_KEY }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          message: "[OMS_CQRS_SYSTEM]: Staging building....."
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+
+      - uses: actions/checkout@v3
+      - name: Build oms-cqrs
+        id: oms-cqrs
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          dockerfile: Dockerfile
+          image: oms-cqrs
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      
+      - name: Deploy staging
+        id: deploy_docker
+        uses: JimCronqvist/action-ssh@master
+        env:
+          IMAGE_OMS_CQRS: "383790499350.dkr.ecr.ap-southeast-1.amazonaws.com/oms-cqrs:${{ steps.oms-cqrs.outputs.tags }}"
+          ELASTICSEARCH_HOST: "stag-pgsync-elastic-elasticsearch.upbase-data-platform"
+          ELASTICSEARCH_PORT: "9200"
+        with:
+          hosts: deploy@210.211.125.40:2242
+          privateKey: ${{ secrets.PRIVATE_SSH_KEY }}
+          command: |
+            export IMAGE_OMS_CQRS=$IMAGE_OMS_CQRS
+            export ELASTICSEARCH_HOST=$ELASTICSEARCH_HOST
+            export ELASTICSEARCH_PORT=$ELASTICSEARCH_PORT
+            echo "Image OMS CQRS: $IMAGE_OMS_CQRS"
+            echo "Elasticsearch Host: $ELASTICSEARCH_HOST"
+            echo "Elasticsearch Port: $ELASTICSEARCH_PORT"
+            cd /opt/upbase/oms-cqrs/
+            git pull
+            envsubst < /opt/upbase/oms-cqrs/docker-compose-staging.tmpl > /opt/upbase/oms-cqrs/docker-compose-runtime.yml
+            sudo docker-compose -f docker-compose-runtime.yml up -d
+
+      - name: Notify result
+        if: always()
+        uses: ivanmilov/telegram_notify_action@v1
+        with:
+          api_key: ${{ secrets.TELEGRAM_API_KEY }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          message: "[OMS_CQRS_SYSTEM]: Deploy staging ${{job.status}}"
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+

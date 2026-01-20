@@ -1,0 +1,182 @@
+name: upbase-order
+on:
+  push:
+    branches:
+      - master
+      - prod
+jobs:
+  staging-deploy:
+    if: ${{ false }}
+    runs-on: self-hosted
+    steps:
+      - name: Notify result
+        if: always()
+        uses: ivanmilov/telegram_notify_action@v1
+        with:
+          api_key: ${{ secrets.TELEGRAM_API_KEY }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          message: "[ORDER_SYSTEM]: Staging building....."
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+
+      - uses: actions/checkout@v3
+      - name: Build order-cli
+        id: order-cli
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          dockerfile: Dockerfile.staging
+          image: order-cli
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: cli
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build order-fpm
+        id: order-fpm
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          dockerfile: Dockerfile.staging
+          image: order-fpm
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: fpm_server
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build order-cron
+        id: order-cron
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          dockerfile: Dockerfile.staging
+          image: order-cron
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: cron
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build order-worker
+        id: order-worker
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          dockerfile: Dockerfile.staging
+          image: order-worker
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: worker
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Deploy staging
+        id: deploy_docker
+        uses: JimCronqvist/action-ssh@master
+        env:
+          IMAGE_FPM: "383790499350.dkr.ecr.ap-southeast-1.amazonaws.com/order-fpm:${{ steps.order-fpm.outputs.tags }}"
+          IMAGE_CRONJOB: "383790499350.dkr.ecr.ap-southeast-1.amazonaws.com/order-cron:${{ steps.order-cron.outputs.tags }}"
+          IMAGE_WORKER: "383790499350.dkr.ecr.ap-southeast-1.amazonaws.com/order-worker:${{ steps.order-worker.outputs.tags }}"
+        with:
+          hosts: deploy@210.211.125.40:2242
+          privateKey: ${{ secrets.PRIVATE_SSH_KEY }}
+          command: |
+            export IMAGE_FPM=$IMAGE_FPM
+            export IMAGE_CRONJOB=$IMAGE_CRONJOB
+            export IMAGE_WORKER=$IMAGE_WORKER
+            echo "Image FPM: $IMAGE_FPM"
+            cd /opt/upbase/connector-order/
+            git pull
+            envsubst < /opt/upbase/connector-order/docker-compose-staging.tmpl > /opt/upbase/connector-order/docker-compose-runtime.yml
+            sudo docker-compose -f docker-compose-runtime.yml up -d
+            sudo docker-compose -f docker-compose-runtime.yml restart order-web
+            sudo docker-compose -f docker-compose-runtime.yml exec -T order-app bash -c 'php artisan migrate && php artisan lighthouse:clear-cache && chmod -R 777 storage/logs && chmod -R 777 storage/framework/views'
+            sudo docker-compose -f docker-compose-runtime.yml exec -T order-cron bash -c 'chmod -R 777 storage/logs && chmod -R 777 storage/framework/views'
+            sudo docker-compose -f docker-compose-runtime.yml exec -T order-worker bash -c 'chmod -R 777 storage/logs && chmod -R 777 storage/framework/views'
+
+      - name: Notify result
+        if: always()
+        uses: ivanmilov/telegram_notify_action@v1
+        with:
+          api_key: ${{ secrets.TELEGRAM_API_KEY }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          message: "[ORDER_SYSTEM]: Deploy staging ${{job.status}}"
+
+  prod-deploy:
+    if: ${{ github.ref == 'refs/heads/prod' }}
+    runs-on: self-hosted
+    steps:
+      - name: Notify result
+        if: always()
+        uses: ivanmilov/telegram_notify_action@v1
+        with:
+          api_key: ${{ secrets.TELEGRAM_API_KEY }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          message: "[ORDER_SYSTEM]: Prod building....."
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+
+      - uses: actions/checkout@v3
+      - name: Build order-cli
+        id: order-cli
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          image: order-cli
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: cli
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build order-fpm
+        id: order-fpm
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          image: order-fpm
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: fpm_server
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build order-cron
+        id: order-cron
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          image: order-cron
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: cron
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build order-worker
+        id: order-worker
+        uses: mr-smithers-excellent/docker-build-push@v6.2
+        with:
+          image: order-worker
+          registry: 383790499350.dkr.ecr.ap-southeast-1.amazonaws.com
+          target: worker
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Deploy Prod
+        id: deploy_docker
+        uses: JimCronqvist/action-ssh@master
+        env:
+          IMAGE_FPM: "383790499350.dkr.ecr.ap-southeast-1.amazonaws.com/order-fpm:${{ steps.order-fpm.outputs.tags }}"
+          IMAGE_CRONJOB: "383790499350.dkr.ecr.ap-southeast-1.amazonaws.com/order-cron:${{ steps.order-cron.outputs.tags }}"
+          IMAGE_WORKER: "383790499350.dkr.ecr.ap-southeast-1.amazonaws.com/order-worker:${{ steps.order-worker.outputs.tags }}"
+        with:
+          hosts: deploy@52.77.190.235
+          privateKey: ${{ secrets.PRIVATE_SSH_KEY }}
+          command: |
+            export IMAGE_FPM=$IMAGE_FPM
+            export IMAGE_CRONJOB=$IMAGE_CRONJOB
+            export IMAGE_WORKER=$IMAGE_WORKER
+            echo "Image FPM: $IMAGE_FPM"
+            cd /opt/upbase/connector-order/
+            git pull
+            envsubst < /opt/upbase/connector-order/docker-compose-prod.tmpl > /opt/upbase/connector-order/docker-compose-runtime.yml
+            sudo docker-compose -f docker-compose-runtime.yml up -d
+            sudo docker-compose -f docker-compose-runtime.yml restart order-web
+            sudo docker-compose -f docker-compose-runtime.yml exec -T order-app bash -c 'php artisan migrate && php artisan lighthouse:clear-cache && chmod -R 777 storage/logs'
+
+      - name: Notify result
+        if: always()
+        uses: ivanmilov/telegram_notify_action@v1
+        with:
+          api_key: ${{ secrets.TELEGRAM_API_KEY }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          message: "[ORDER_SYSTEM]: Deploy prod ${{job.status}}"
