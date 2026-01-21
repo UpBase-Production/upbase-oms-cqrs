@@ -16,6 +16,5 @@ RUN apt-get update  && apt-get install -y vim \
 # Copy project files
 COPY . .
 RUN pip install -e .
+
  
-# Make scripts executable
-RUN chmod +x ./docker/wait-for-it.sh ./docker/runserver.sh

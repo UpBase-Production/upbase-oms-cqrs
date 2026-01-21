@@ -7,7 +7,6 @@
 ./wait-for-it.sh $REDIS_HOST:$REDIS_PORT -t 60
 
 EXAMPLE_DIR="examples/${EXAMPLE_NAME:-airbnb}"
- 
-bootstrap --config $EXAMPLE_DIR/schema.json
+
 
 pgsync --config $EXAMPLE_DIR/schema.json --daemon
